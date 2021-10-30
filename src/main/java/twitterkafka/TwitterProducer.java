@@ -10,11 +10,13 @@ import com.twitter.hbc.core.endpoint.StatusesFilterEndpoint;
 import com.twitter.hbc.core.processor.StringDelimitedProcessor;
 import com.twitter.hbc.httpclient.auth.Authentication;
 import com.twitter.hbc.httpclient.auth.OAuth1;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.*;
+import org.apache.kafka.common.serialization.StringSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import io.github.cdimascio.dotenv.Dotenv;
 import java.util.List;
+import java.util.Properties;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
@@ -36,7 +38,7 @@ public class TwitterProducer {
         Client client = createTwitterClient(msgQueue);
         client.connect();
 
-//        KafkaProducer<String, String> producer = createKafkaProducer();
+        KafkaProducer<String, String> producer = createKafkaProducer();
 
         while (!client.isDone()) {
             String msg = null;
@@ -48,6 +50,14 @@ public class TwitterProducer {
             }
             if (msg != null) {
                 logger.info(msg);
+                producer.send(new ProducerRecord<>("twitter_tweets", null, msg), new Callback() {
+                    @Override
+                    public void onCompletion(RecordMetadata recordMetadata, Exception e) {
+                        if (e != null) {
+                            logger.error("ERROR", e);
+                        }
+                    }
+                });
             }
         }
         logger.info("--- EXIT ---");
@@ -58,7 +68,7 @@ public class TwitterProducer {
         StatusesFilterEndpoint endpoint = new StatusesFilterEndpoint();
 
         List<Long> followings = Lists.newArrayList(1234L, 566788L);
-        List<String> terms = Lists.newArrayList("twitter", "api");
+        List<String> terms = Lists.newArrayList("bitcoin", "eth", "btc");
         endpoint.followings(followings);
         endpoint.trackTerms(terms);
 
@@ -74,5 +84,16 @@ public class TwitterProducer {
                 .authentication(oauth)
                 .endpoint(endpoint)
                 .processor(new StringDelimitedProcessor(msgQueue)).build();
+    }
+
+    private KafkaProducer<String, String> createKafkaProducer() {
+        Properties properties = new Properties();
+        String bootstrapServers = "127.0.0.1:9092";
+
+        properties.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        properties.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        properties.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+
+        return new KafkaProducer<String, String>(properties);
     }
 }
