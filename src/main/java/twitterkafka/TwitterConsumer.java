@@ -42,13 +42,19 @@ public class TwitterConsumer {
                         "Keys: " + record.key() + ", Value: " + record.value()
                 );
 
+                String id = record.topic() + "_" + record.partition() + "_" + record.offset();
+
                 IndexRequest indexRequest = new IndexRequest(
-                        "twitter", "tweets"
+                        "twitter", "tweets", id
                 ).source(record.value(), XContentType.JSON);
 
                 IndexResponse indexResponse = client.index(indexRequest, RequestOptions.DEFAULT);
-                String id = indexResponse.getId();
-                logger.info(id);
+                logger.info(indexResponse.getId());
+                try {
+                    Thread.sleep(1000);
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
             }
         }
 
